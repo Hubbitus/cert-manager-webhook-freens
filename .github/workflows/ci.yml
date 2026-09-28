@@ -21,7 +21,7 @@ jobs:
       - run: make test
       - run: make helm-lint
 
-  # cert-manager conformance against the live FreeNS zone (ADR-0076).
+  # cert-manager conformance against the live FreeNS zone.
   conformance:
     if: github.event_name == 'push'
     needs: unit

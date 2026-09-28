@@ -30,7 +30,7 @@ ENVTEST_DIR := $(CURDIR)/bin/k8s/$(ENVTEST_K8S_VERSION)-$(shell $(GO) env GOOS)-
 setup-envtest:
 	setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir $(CURDIR)/bin -p path
 
-# cert-manager conformance suite against the live FreeNS API (ADR-0076).
+# cert-manager conformance suite against the live FreeNS API.
 # Needs FREENS_API_KEY; the key only reaches a git-ignored file that is removed
 # after the run, never argv or output.
 .PHONY: test-conformance

@@ -16,7 +16,7 @@ import (
 
 const (
 	// Records go to the dev.neinache.com FreeNS domain (config.json `zone`)
-	// under the ci. label, apart from real _acme-challenge records (ADR-0076).
+	// under the ci. label, apart from real _acme-challenge records.
 	conformanceZone = "ci.dev.neinache.com."
 	// Authoritative FreeNS server: the test works before delegation.
 	conformanceDNS = "a.freens.ru:53"

@@ -25,8 +25,8 @@ const (
 	testKey    = "fns_solver_test_secret"
 	testNS     = "cert-manager"
 	testSecret = "freens-api-key"
-	testZone   = "dev.neinache.com"
-	testID     = 55
+	testZone   = "example.org"
+	testID     = 2
 )
 
 // fakeFreeNS is an in-memory FreeNS account with one zone.
@@ -339,8 +339,8 @@ func TestZoneNotInAccount(t *testing.T) {
 	}
 }
 
-// ADR-0076 § 3: `zone` overrides ResolvedZone, e.g. for conformance on
-// ci.dev.neinache.com that lives inside the dev.neinache.com FreeNS domain.
+// `zone` overrides ResolvedZone, e.g. for conformance records under a ci.
+// label that live inside the parent FreeNS domain.
 func TestZoneOverride(t *testing.T) {
 	api, url := newFakeFreeNS(t)
 	s := newSolver(validSecret)
@@ -360,9 +360,9 @@ func TestFQDNOutsideZone(t *testing.T) {
 	_, url := newFakeFreeNS(t)
 	s := newSolver(validSecret)
 	ch := challenge(t, url, "k1", nil)
-	ch.ResolvedFQDN = "_acme-challenge.example.org."
+	ch.ResolvedFQDN = "_acme-challenge.example.net."
 
-	if err := s.Present(ch); err == nil || !strings.Contains(err.Error(), "example.org") {
+	if err := s.Present(ch); err == nil || !strings.Contains(err.Error(), "example.net") {
 		t.Fatalf("err = %v, want error for FQDN outside zone", err)
 	}
 }

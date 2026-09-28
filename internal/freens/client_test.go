@@ -63,27 +63,27 @@ func assertNoKey(t *testing.T, err error) {
 }
 
 const domainsBody = `{"domains":[
-	{"id":7,"user_id":756,"name":"other.example.org","is_active":true},
-	{"id":55,"user_id":756,"name":"dev.neinache.com","is_active":true}]}`
+	{"id":1,"user_id":1,"name":"other.example.net","is_active":true},
+	{"id":2,"user_id":1,"name":"example.org","is_active":true}]}`
 
 func TestDomainIDFindsZone(t *testing.T) {
 	c, _ := newClient(t, map[string]response{"GET /domains": {200, domainsBody}})
 
-	id, err := c.DomainID(context.Background(), "dev.neinache.com")
+	id, err := c.DomainID(context.Background(), "example.org")
 	if err != nil {
 		t.Fatalf("DomainID: %v", err)
 	}
-	if id != 55 {
-		t.Fatalf("id = %d, want 55", id)
+	if id != 2 {
+		t.Fatalf("id = %d, want 2", id)
 	}
 }
 
 func TestDomainIDAcceptsTrailingDotAndCase(t *testing.T) {
 	c, _ := newClient(t, map[string]response{"GET /domains": {200, domainsBody}})
 
-	id, err := c.DomainID(context.Background(), "Dev.Neinache.com.")
-	if err != nil || id != 55 {
-		t.Fatalf("DomainID = %d, %v; want 55, nil", id, err)
+	id, err := c.DomainID(context.Background(), "Example.ORG.")
+	if err != nil || id != 2 {
+		t.Fatalf("DomainID = %d, %v; want 2, nil", id, err)
 	}
 }
 
@@ -101,23 +101,23 @@ func TestDomainIDZoneMissing(t *testing.T) {
 
 func TestAPIKeyHeaderOnEveryRequest(t *testing.T) {
 	c, api := newClient(t, map[string]response{
-		"GET /domains":                 {200, domainsBody},
-		"GET /domains/55/records":      {200, `{"records":[]}`},
-		"POST /domains/55/records":     {201, `{"record":{"id":1,"name":"a","type":"TXT","content":"k","ttl":60}}`},
-		"DELETE /domains/55/records/1": {200, `{}`},
+		"GET /domains":                {200, domainsBody},
+		"GET /domains/2/records":      {200, `{"records":[]}`},
+		"POST /domains/2/records":     {201, `{"record":{"id":1,"name":"a","type":"TXT","content":"k","ttl":60}}`},
+		"DELETE /domains/2/records/1": {200, `{}`},
 	})
 	ctx := context.Background()
 
-	if _, err := c.DomainID(ctx, "dev.neinache.com"); err != nil {
+	if _, err := c.DomainID(ctx, "example.org"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Records(ctx, 55); err != nil {
+	if _, err := c.Records(ctx, 2); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.CreateRecord(ctx, 55, Record{Name: "a", Type: "TXT", Content: "k", TTL: 60}); err != nil {
+	if err := c.CreateRecord(ctx, 2, Record{Name: "a", Type: "TXT", Content: "k", TTL: 60}); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.DeleteRecord(ctx, 55, 1); err != nil {
+	if err := c.DeleteRecord(ctx, 2, 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -136,7 +136,7 @@ func TestErrorsDoNotLeakAPIKey(t *testing.T) {
 		"GET /domains": {401, `{"error":"invalid api key ` + testKey + `"}`},
 	})
 
-	_, err := c.DomainID(context.Background(), "dev.neinache.com")
+	_, err := c.DomainID(context.Background(), "example.org")
 	if err == nil {
 		t.Fatal("want error on 401")
 	}
@@ -148,12 +148,12 @@ func TestErrorsDoNotLeakAPIKey(t *testing.T) {
 
 func TestRecordsParsesList(t *testing.T) {
 	c, _ := newClient(t, map[string]response{
-		"GET /domains/55/records": {200, `{"records":[
-			{"id":120,"domain_id":55,"name":"_acme-challenge","type":"TXT","content":"k1","ttl":60,"priority":null},
-			{"id":121,"domain_id":55,"name":"*","type":"A","content":"1.2.3.4","ttl":60}]}`},
+		"GET /domains/2/records": {200, `{"records":[
+			{"id":120,"domain_id":2,"name":"_acme-challenge","type":"TXT","content":"k1","ttl":60,"priority":null},
+			{"id":121,"domain_id":2,"name":"*","type":"A","content":"1.2.3.4","ttl":60}]}`},
 	})
 
-	recs, err := c.Records(context.Background(), 55)
+	recs, err := c.Records(context.Background(), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,11 +173,11 @@ func TestRecordsParsesList(t *testing.T) {
 
 func TestCreateRecordSendsExactBody(t *testing.T) {
 	c, api := newClient(t, map[string]response{
-		"POST /domains/55/records": {201, `{"record":{"id":130,"domain_id":55,"name":"_acme-challenge","type":"TXT","content":"k","ttl":60}}`},
+		"POST /domains/2/records": {201, `{"record":{"id":130,"domain_id":2,"name":"_acme-challenge","type":"TXT","content":"k","ttl":60}}`},
 	})
 
 	// A stale ID on the input must not leak into the create request.
-	if err := c.CreateRecord(context.Background(), 55, Record{ID: 5, Name: "_acme-challenge", Type: "TXT", Content: "k", TTL: 60}); err != nil {
+	if err := c.CreateRecord(context.Background(), 2, Record{ID: 5, Name: "_acme-challenge", Type: "TXT", Content: "k", TTL: 60}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -199,30 +199,30 @@ func TestCreateRecordSendsExactBody(t *testing.T) {
 // The create response is undocumented and unused: any 2xx body is success.
 func TestCreateRecordIgnoresResponseBody(t *testing.T) {
 	c, _ := newClient(t, map[string]response{
-		"POST /domains/55/records": {201, `not json`},
+		"POST /domains/2/records": {201, `not json`},
 	})
 
-	if err := c.CreateRecord(context.Background(), 55, Record{Name: "x", Type: "TXT", Content: "k", TTL: 60}); err != nil {
+	if err := c.CreateRecord(context.Background(), 2, Record{Name: "x", Type: "TXT", Content: "k", TTL: 60}); err != nil {
 		t.Fatalf("CreateRecord = %v, want nil", err)
 	}
 }
 
 func TestDeleteRecordNotFoundIsNil(t *testing.T) {
 	c, _ := newClient(t, map[string]response{
-		"DELETE /domains/55/records/9": {404, `{"error":"Record not found"}`},
+		"DELETE /domains/2/records/9": {404, `{"error":"Record not found"}`},
 	})
 
-	if err := c.DeleteRecord(context.Background(), 55, 9); err != nil {
+	if err := c.DeleteRecord(context.Background(), 2, 9); err != nil {
 		t.Fatalf("DeleteRecord on 404 = %v, want nil", err)
 	}
 }
 
 func TestDeleteRecordServerError(t *testing.T) {
 	c, _ := newClient(t, map[string]response{
-		"DELETE /domains/55/records/9": {500, `{"error":"boom"}`},
+		"DELETE /domains/2/records/9": {500, `{"error":"boom"}`},
 	})
 
-	err := c.DeleteRecord(context.Background(), 55, 9)
+	err := c.DeleteRecord(context.Background(), 2, 9)
 	if err == nil {
 		t.Fatal("want error on 500")
 	}
@@ -238,15 +238,15 @@ func TestDeleteRecordServerError(t *testing.T) {
 
 func TestNonJSONResponse(t *testing.T) {
 	c, _ := newClient(t, map[string]response{
-		"GET /domains/55/records": {502, `<html>Bad Gateway</html>`},
-		"GET /domains":            {200, `not json`},
+		"GET /domains/2/records": {502, `<html>Bad Gateway</html>`},
+		"GET /domains":           {200, `not json`},
 	})
 
-	_, err := c.Records(context.Background(), 55)
+	_, err := c.Records(context.Background(), 2)
 	if err == nil || !strings.Contains(err.Error(), "502") {
 		t.Fatalf("Records err = %v, want error with 502", err)
 	}
-	_, err = c.DomainID(context.Background(), "dev.neinache.com")
+	_, err = c.DomainID(context.Background(), "example.org")
 	if err == nil || !strings.Contains(err.Error(), "200") {
 		t.Fatalf("DomainID err = %v, want decode error with 200", err)
 	}
@@ -267,7 +267,7 @@ func TestTransportErrorDoesNotLeakAPIKey(t *testing.T) {
 	srv.Close()
 	c := NewClient(srv.URL, testKey)
 
-	_, err := c.Records(context.Background(), 55)
+	_, err := c.Records(context.Background(), 2)
 	if err == nil {
 		t.Fatal("want transport error")
 	}
