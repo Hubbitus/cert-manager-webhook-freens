@@ -39,6 +39,7 @@ type fakeFreeNS struct {
 	failKey    bool // answer 401 echoing the key
 	failWrites bool // answer 500 to POST and DELETE
 	attempts   int  // POST and DELETE requests, failed ones included
+	failList   bool // answer 500 to GET records
 	transport  http.RoundTripper
 }
 
@@ -83,6 +84,9 @@ func (f *fakeFreeNS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/domains":
 		_, _ = fmt.Fprintf(w, `{"domains":[{"id":%d,"name":%q}]}`, testID, testZone)
+	case r.Method == http.MethodGet && r.URL.Path == recordsPath && f.failList:
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `{"error":"list failed"}`)
 	case r.Method == http.MethodGet && r.URL.Path == recordsPath:
 		list := make([]freens.Record, 0, len(f.records))
 		for _, rec := range f.records {
@@ -472,5 +476,74 @@ func TestAPIURLMustBeHTTPS(t *testing.T) {
 	raw := []byte(`{"apiKeySecretRef":{"name":"n","key":"k"},"apiUrl":"https://freens.example/api/v1"}`)
 	if _, err := loadConfig(&extapi.JSON{Raw: raw}); err != nil {
 		t.Errorf("https apiUrl: %v", err)
+	}
+}
+
+func TestInitializeError(t *testing.T) {
+	s := &freensSolver{}
+	// client-go rejects QPS without Burst when no RateLimiter is set.
+	if err := s.Initialize(&rest.Config{Host: "https://127.0.0.1:6443", QPS: 5}, nil); err == nil {
+		t.Fatal("Initialize with invalid rest.Config: want error")
+	}
+	if s.client != nil {
+		t.Fatal("client set despite error")
+	}
+}
+
+func TestPresentReportsListFailure(t *testing.T) {
+	api, url := newFakeFreeNS(t)
+	api.failList = true
+	s := newSolver(api, validSecret)
+
+	err := s.Present(challenge(t, url, "k1", nil))
+	if err == nil || !strings.Contains(err.Error(), "list failed") {
+		t.Fatalf("err = %v, want list error", err)
+	}
+	if api.attempts != 0 {
+		t.Fatalf("writes after failed list = %d, want 0", api.attempts)
+	}
+}
+
+func TestCleanUpReportsListFailure(t *testing.T) {
+	api, url := newFakeFreeNS(t, freens.Record{Name: "_acme-challenge", Type: "TXT", Content: "k1", TTL: 60})
+	api.failList = true
+	s := newSolver(api, validSecret)
+
+	err := s.CleanUp(challenge(t, url, "k1", nil))
+	if err == nil || !strings.Contains(err.Error(), "list failed") {
+		t.Fatalf("err = %v, want list error", err)
+	}
+	if api.attempts != 0 {
+		t.Fatalf("writes after failed list = %d, want 0", api.attempts)
+	}
+}
+
+// A challenge FQDN equal to the zone maps to the FreeNS apex name.
+func TestApexFQDN(t *testing.T) {
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api, validSecret)
+	ch := challenge(t, url, "k1", nil)
+	ch.ResolvedFQDN = testZone + "."
+
+	if err := s.Present(ch); err != nil {
+		t.Fatal(err)
+	}
+	if got := api.txt(freens.ApexName); len(got) != 1 {
+		t.Fatalf("TXT %q = %v, want one", freens.ApexName, got)
+	}
+}
+
+func TestMixedCaseFQDNAndZone(t *testing.T) {
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api, validSecret)
+	ch := challenge(t, url, "k1", nil)
+	ch.ResolvedFQDN = "_ACME-Challenge.Example.ORG."
+	ch.ResolvedZone = "Example.Org."
+
+	if err := s.Present(ch); err != nil {
+		t.Fatal(err)
+	}
+	if got := api.txt("_acme-challenge"); len(got) != 1 {
+		t.Fatalf("TXT _acme-challenge = %v, want one", got)
 	}
 }

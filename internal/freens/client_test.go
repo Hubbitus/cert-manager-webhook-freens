@@ -302,3 +302,43 @@ func TestRedirectIsNotFollowed(t *testing.T) {
 		t.Fatalf("redirect target received %d request(s)", len(leaked))
 	}
 }
+
+func TestInvalidBaseURL(t *testing.T) {
+	c := NewClient("http://bad host\x7f", testKey)
+
+	_, err := c.Records(context.Background(), 2)
+	if err == nil || !strings.Contains(err.Error(), "GET /domains/2/records") {
+		t.Fatalf("err = %v, want request build error naming the call", err)
+	}
+	assertNoKey(t, err)
+}
+
+func TestBodyReadError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"rec`)
+		w.(http.Flusher).Flush()
+		panic(http.ErrAbortHandler) // cut the body short
+	}))
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, testKey)
+
+	_, err := c.Records(context.Background(), 2)
+	if err == nil || !strings.Contains(err.Error(), "HTTP 200: read body") {
+		t.Fatalf("err = %v, want read body error with status", err)
+	}
+}
+
+// With no key configured, redaction must leave the server message untouched.
+func TestEmptyKeyKeepsErrorMessage(t *testing.T) {
+	api := &fakeAPI{responses: map[string]response{"GET /domains/2/records": {500, `{"error":"boom"}`}}}
+	srv := httptest.NewServer(api)
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, "")
+
+	_, err := c.Records(context.Background(), 2)
+	if err == nil || !strings.HasSuffix(err.Error(), "HTTP 500: boom") {
+		t.Fatalf("err = %v, want message ending in \"HTTP 500: boom\"", err)
+	}
+}
