@@ -1,0 +1,9 @@
+apiVersion: v2
+name: cert-manager-webhook-freens
+description: cert-manager ACME DNS-01 webhook solver for FreeNS
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/Hubbitus/cert-manager-webhook-freens
+sources:
+  - https://github.com/Hubbitus/cert-manager-webhook-freens

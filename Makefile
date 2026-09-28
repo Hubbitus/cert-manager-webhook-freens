@@ -3,7 +3,7 @@
 GO ?= go
 
 .PHONY: all
-all: vet lint test build
+all: vet lint test helm-lint build
 
 .PHONY: build
 build:
@@ -47,6 +47,17 @@ test-conformance:
 	TEST_ASSET_KUBE_APISERVER=$(ENVTEST_DIR)/kube-apiserver \
 	TEST_ASSET_KUBECTL=$(ENVTEST_DIR)/kubectl \
 	$(GO) test -tags conformance -count=1 -v -run '^TestConformance$$' .
+
+.PHONY: helm-lint
+helm-lint:
+	helm lint --strict deploy/cert-manager-webhook-freens
+
+IMAGE ?= docker.io/hubbitus/cert-manager-webhook-freens
+IMAGE_TAG ?= dev
+
+.PHONY: image
+image:
+	docker build -t $(IMAGE):$(IMAGE_TAG) .
 
 .PHONY: clean
 clean:

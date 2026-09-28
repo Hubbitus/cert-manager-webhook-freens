@@ -19,6 +19,7 @@ jobs:
       - run: make vet
       - run: make lint
       - run: make test
+      - run: make helm-lint
 
   # cert-manager conformance against the live FreeNS zone (ADR-0076).
   conformance:

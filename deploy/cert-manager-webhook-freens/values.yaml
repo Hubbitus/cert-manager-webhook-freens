@@ -1,0 +1,52 @@
+# API group of the solver; referenced as `groupName` in the Issuer's webhook stanza.
+groupName: acme.freens.ru
+
+certManager:
+  namespace: cert-manager
+  serviceAccountName: cert-manager
+
+# Secret with the FreeNS API key, in certManager.namespace (a ClusterIssuer's
+# challenges resolve Secrets there). The webhook may only `get` this one name.
+apiKeySecret:
+  name: freens-api-key
+
+image:
+  repository: docker.io/hubbitus/cert-manager-webhook-freens
+  # Defaults to the chart appVersion.
+  tag: ""
+  # Optional sha256 digest; when set, the image is pulled as tag@digest.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 443
+
+# Unprivileged port the webhook listens on inside the pod.
+containerPort: 8443
+
+resources: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
