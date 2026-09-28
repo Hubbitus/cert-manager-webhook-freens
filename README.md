@@ -45,6 +45,7 @@ Tool versions are pinned in [`mise.toml`](mise.toml), with download checksums in
 
 ```bash
 mise install
+mise exec -- make smoke # build the image, run `--help` in it (CONTAINER=podman without docker)
 mise exec -- make all   # `make check` (vet, lint, unit tests with a 100 % per-function coverage gate, helm lint, govulncheck) + build
 ```
 
@@ -86,7 +87,7 @@ Latest stable releases, checked 2026-09-28 against GitHub Releases, `go.dev/dl` 
 
 Set `version` and `appVersion` in `deploy/cert-manager-webhook-freens/Chart.yaml` to `X.Y.Z`, then push tag `vX.Y.Z` on a commit of `main`. The release workflow runs four jobs:
 
-1. `verify` — no secrets: refuses a tag that is not on `main` or differs from the chart version, runs `make check`.
+1. `verify` — no secrets: refuses a tag that is not on `main` or differs from the chart version, or a chart repository equal to the image repository; runs `make check` and `make smoke`.
 2. `conformance` — the conformance suite against live FreeNS.
 3. `publish` — builds `linux/amd64` and `linux/arm64`, pushes the image and the OCI chart.
 4. `sign` — the only job with `id-token: write`: signs the image and the chart by digest with cosign (keyless) and prints both digests in the job summary.

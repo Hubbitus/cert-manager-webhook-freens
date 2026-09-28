@@ -19,6 +19,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-mise
       - run: make check
+      - run: make smoke
 
   conformance:
     if: github.event_name == 'push'

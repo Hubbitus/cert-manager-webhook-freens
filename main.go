@@ -18,8 +18,8 @@ func groupName() string {
 	return DefaultGroupName
 }
 
-// main only starts the server; excluded from unit coverage, exercised by the
-// container smoke run (`webhook --help`) and the cluster.
+// main only starts the server; excluded from the unit coverage gate and
+// exercised by `make smoke` (`webhook --help` in the built image, ci and release).
 func main() {
 	cmd.RunWebhookServer(groupName(), &freensSolver{})
 }

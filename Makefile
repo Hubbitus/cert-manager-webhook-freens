@@ -76,10 +76,19 @@ helm-lint:
 
 IMAGE ?= docker.io/hubbitus/cert-manager-webhook-freens
 IMAGE_TAG ?= dev
+# `make smoke CONTAINER=podman` locally without docker.
+CONTAINER ?= docker
 
 .PHONY: image
 image:
-	docker build -t $(IMAGE):$(IMAGE_TAG) .
+	$(CONTAINER) build -t $(IMAGE):$(IMAGE_TAG) .
+
+# Container smoke run: the image starts and main() parses its flags.
+.PHONY: smoke
+smoke: image
+	@out=$$($(CONTAINER) run --rm $(IMAGE):$(IMAGE_TAG) --help 2>&1) || { echo "$$out"; echo "smoke: --help exited non-zero"; exit 1; }; \
+	echo "$$out" | grep -q '^Usage:' || { echo "$$out"; echo "smoke: no Usage: in --help output"; exit 1; }; \
+	echo "smoke: ok"
 
 .PHONY: clean
 clean:

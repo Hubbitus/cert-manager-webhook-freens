@@ -63,6 +63,7 @@ jobs:
 
       - uses: ./.github/actions/setup-mise
       - run: make check
+      - run: make smoke
 
   # Environment `conformance` scopes FREENS_API_KEY to this job.
   conformance:
