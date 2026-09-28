@@ -12,13 +12,11 @@ env:
   CHART_REPO: oci://registry-1.docker.io/hubbitus
 
 jobs:
-  release:
+  # No secrets here: tag guard and all checks.
+  verify:
     runs-on: ubuntu-24.04
-    # Holds DOCKERHUB_*; protection rules are set on the environment.
-    environment: release
-    permissions:
-      contents: read
-      id-token: write # cosign keyless signing
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,13 +29,6 @@ jobs:
             echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main"
             exit 1
           fi
-
-      # mise itself is pinned and checked by binary sha256; tools install
-      # --locked from mise.lock checksums.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-        with:
-          version: 2026.9.16
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
 
       - name: Check tag matches chart version and appVersion
         id: version
@@ -52,7 +43,25 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - run: make vet lint test vulncheck
+      - uses: ./.github/actions/setup-mise
+      - run: make check
+
+  # Environment `conformance` scopes FREENS_API_KEY to this job.
+  conformance:
+    needs: verify
+    uses: ./.github/workflows/conformance.yml
+
+  publish:
+    needs: [verify, conformance]
+    runs-on: ubuntu-24.04
+    # Holds DOCKERHUB_*; protection rules are set on the environment.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # cosign keyless signing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-mise
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -68,7 +77,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+          tags: ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}
           provenance: mode=max
           sbom: true
 
@@ -88,11 +97,11 @@ jobs:
         run: |
           printf '%s' "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
           helm package deploy/cert-manager-webhook-freens --destination _out
-          helm push "_out/cert-manager-webhook-freens-${{ steps.version.outputs.version }}.tgz" "$CHART_REPO"
+          helm push "_out/cert-manager-webhook-freens-${{ needs.verify.outputs.version }}.tgz" "$CHART_REPO"
 
       - name: Summary
         run: |
           {
-            echo "image: \`${IMAGE}:${{ steps.version.outputs.version }}@${{ steps.build.outputs.digest }}\`"
-            echo "chart: \`${CHART_REPO}/cert-manager-webhook-freens\` version \`${{ steps.version.outputs.version }}\`"
+            echo "image: \`${IMAGE}:${{ needs.verify.outputs.version }}@${{ steps.build.outputs.digest }}\`"
+            echo "chart: \`${CHART_REPO}/cert-manager-webhook-freens\` version \`${{ needs.verify.outputs.version }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

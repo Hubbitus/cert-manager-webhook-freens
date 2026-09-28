@@ -1,9 +1,9 @@
 name: ci
 
+# Tags are covered by the release workflow, which runs the same checks.
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -11,50 +11,14 @@ permissions:
   contents: read
 
 jobs:
-  unit:
+  check:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # mise itself is pinned and checked by binary sha256; tools install
-      # --locked from mise.lock checksums.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-        with:
-          version: 2026.9.16
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-      - run: make vet
-      - run: make lint
-      - run: make test
-      - run: make helm-lint
-      - run: make vulncheck
+      - uses: ./.github/actions/setup-mise
+      - run: make check
 
-  # cert-manager conformance against the live FreeNS zone.
   conformance:
     if: github.event_name == 'push'
-    needs: unit
-    runs-on: ubuntu-24.04
-    # Holds FREENS_API_KEY; protection rules are set on the environment.
-    environment: conformance
-    # Runs share one FreeNS zone; names are unique per run, serialising is a cheap extra guard.
-    concurrency:
-      group: conformance-freens
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # mise itself is pinned and checked by binary sha256; tools install
-      # --locked from mise.lock checksums.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-        with:
-          version: 2026.9.16
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-      - name: Require FREENS_API_KEY
-        env:
-          FREENS_API_KEY: ${{ secrets.FREENS_API_KEY }}
-        run: |
-          if [ -z "$FREENS_API_KEY" ]; then
-            echo "::error::GitHub secret FREENS_API_KEY is not set"
-            exit 1
-          fi
-      - name: Conformance
-        env:
-          FREENS_API_KEY: ${{ secrets.FREENS_API_KEY }}
-        run: make test-conformance
+    needs: check
+    uses: ./.github/workflows/conformance.yml

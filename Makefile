@@ -3,7 +3,11 @@
 GO ?= go
 
 .PHONY: all
-all: vet lint test helm-lint vulncheck build
+all: check build
+
+# Everything CI and release gate on.
+.PHONY: check
+check: vet lint test helm-lint vulncheck
 
 .PHONY: build
 build:

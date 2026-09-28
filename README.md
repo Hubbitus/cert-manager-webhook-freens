@@ -35,7 +35,7 @@ solvers:
             key: api-key
           # Optional: FreeNS domain, when it differs from the SOA-resolved zone.
           zone: example.org
-          # Optional: defaults to https://freens.ru/api/v1
+          # Optional, https only; defaults to https://freens.ru/api/v1
           apiUrl: https://freens.ru/api/v1
 ```
 
@@ -45,7 +45,7 @@ Tool versions are pinned in [`mise.toml`](mise.toml), with download checksums in
 
 ```bash
 mise install
-mise exec -- make all   # vet, lint, unit tests, helm lint, govulncheck, build
+mise exec -- make all   # `make check` (vet, lint, unit tests, helm lint, govulncheck) + build
 ```
 
 ### Conformance
@@ -56,7 +56,7 @@ The cert-manager conformance suite runs against the live FreeNS zone `dev.neinac
 FREENS_API_KEY=... mise exec -- make test-conformance
 ```
 
-CI runs it on every push to `main` and on tags, with the key from the `FREENS_API_KEY` repository secret.
+CI runs it on every push to `main`, and the release workflow runs it before publishing; the key is the `FREENS_API_KEY` secret of the `conformance` environment.
 
 ## Versions
 
@@ -84,7 +84,7 @@ Latest stable releases, checked 2026-09-28 against GitHub Releases, `go.dev/dl` 
 
 ## Releasing
 
-Set `version` and `appVersion` in `deploy/cert-manager-webhook-freens/Chart.yaml` to `X.Y.Z`, then push tag `vX.Y.Z` on a commit of `main`. The release workflow refuses a tag that is not on `main` or differs from the chart, builds `linux/amd64` and `linux/arm64`, pushes the image, signs it by digest with cosign (keyless), pushes the chart, and prints the image digest in the job summary. It runs in the `release` environment; conformance runs in the `conformance` environment. Repository secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (release), `FREENS_API_KEY` (conformance).
+Set `version` and `appVersion` in `deploy/cert-manager-webhook-freens/Chart.yaml` to `X.Y.Z`, then push tag `vX.Y.Z` on a commit of `main`. The release workflow refuses a tag that is not on `main` or differs from the chart, runs `make check` and the conformance suite, then builds `linux/amd64` and `linux/arm64`, pushes the image, signs it by digest with cosign (keyless), pushes the chart, and prints the image digest in the job summary. Publishing runs in the `release` environment and conformance in the `conformance` environment; secrets live in those environments: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (release), `FREENS_API_KEY` (conformance).
 
 ## License
 

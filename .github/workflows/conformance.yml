@@ -1,0 +1,34 @@
+name: conformance
+
+# Reusable: called by ci (push to main) and release (gate before publish).
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # cert-manager conformance against the live FreeNS zone.
+  conformance:
+    runs-on: ubuntu-24.04
+    # Holds FREENS_API_KEY; protection rules are set on the environment.
+    environment: conformance
+    # Runs share one FreeNS zone; names are unique per run, serialising is a cheap extra guard.
+    concurrency:
+      group: conformance-freens
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-mise
+      - name: Require FREENS_API_KEY
+        env:
+          FREENS_API_KEY: ${{ secrets.FREENS_API_KEY }}
+        run: |
+          if [ -z "$FREENS_API_KEY" ]; then
+            echo "::error::GitHub secret FREENS_API_KEY is not set"
+            exit 1
+          fi
+      - name: Conformance
+        env:
+          FREENS_API_KEY: ${{ secrets.FREENS_API_KEY }}
+        run: make test-conformance
