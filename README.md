@@ -15,6 +15,16 @@ mise install
 mise exec -- make all   # vet, lint, unit tests, build
 ```
 
+### Conformance
+
+The cert-manager conformance suite runs against the live FreeNS zone `dev.neinache.com`, under the `ci.` label, and queries the authoritative `a.freens.ru` directly. It is a separate target, not part of `go test ./...`; without `FREENS_API_KEY` it prints `SKIP` and exits 0.
+
+```bash
+FREENS_API_KEY=... mise exec -- make test-conformance
+```
+
+CI runs it on every push to `main` and on tags, with the key from the `FREENS_API_KEY` repository secret.
+
 ## Versions
 
 Latest stable releases, checked 2026-09-28 against GitHub Releases, `go.dev/dl` and the registries.
@@ -27,6 +37,7 @@ Latest stable releases, checked 2026-09-28 against GitHub Releases, `go.dev/dl` 
 | `cert-manager/webhook-example` (scaffold) | commit `62cb1d42de165036395b4d2ed66f8c0cb2a1c1a4` (no tags upstream) |
 | golangci-lint                             | `2.14.0`                                                             |
 | Helm                                      | `4.3.0`                                                              |
+| setup-envtest / envtest Kubernetes        | `0.25.1` / `1.37.0`                                                  |
 | `actions/checkout`                        | `v7.0.1` @ `3d3c42e5aac5ba805825da76410c181273ba90b1`                |
 | `jdx/mise-action`                         | `v4.3.0` @ `c2a87611a18de5b3828c5652fe268e992400cb5c`                |
 

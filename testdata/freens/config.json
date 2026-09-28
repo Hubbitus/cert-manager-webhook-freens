@@ -1,0 +1,7 @@
+{
+  "apiKeySecretRef": {
+    "name": "freens-api-key",
+    "key": "api-key"
+  },
+  "zone": "dev.neinache.com"
+}
