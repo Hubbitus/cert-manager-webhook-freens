@@ -84,7 +84,17 @@ Latest stable releases, checked 2026-09-28 against GitHub Releases, `go.dev/dl` 
 
 ## Releasing
 
-Set `version` and `appVersion` in `deploy/cert-manager-webhook-freens/Chart.yaml` to `X.Y.Z`, then push tag `vX.Y.Z` on a commit of `main`. The release workflow refuses a tag that is not on `main` or differs from the chart, runs `make check` and the conformance suite, then builds `linux/amd64` and `linux/arm64`, pushes the image, signs it by digest with cosign (keyless), pushes the chart, and prints the image digest in the job summary. Publishing runs in the `release` environment and conformance in the `conformance` environment; secrets live in those environments: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (release), `FREENS_API_KEY` (conformance).
+Set `version` and `appVersion` in `deploy/cert-manager-webhook-freens/Chart.yaml` to `X.Y.Z`, then push tag `vX.Y.Z` on a commit of `main`. The release workflow runs four jobs:
+
+1. `verify` — no secrets: refuses a tag that is not on `main` or differs from the chart version, runs `make check`.
+2. `conformance` — the conformance suite against live FreeNS.
+3. `publish` — builds `linux/amd64` and `linux/arm64`, pushes the image and the OCI chart.
+4. `sign` — the only job with `id-token: write`: signs the image and the chart by digest with cosign (keyless) and prints both digests in the job summary.
+
+GitHub environments hold the credentials:
+
+- `conformance`: secret `FREENS_API_KEY`.
+- `release`: secret `DOCKERHUB_TOKEN` and variable `DOCKERHUB_USERNAME`. The token needs Read & Write access only (no Delete); Docker Hub personal access tokens cannot be limited to one repository, an organization access token can.
 
 ## License
 
