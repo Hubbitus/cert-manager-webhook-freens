@@ -4,7 +4,9 @@ package deploy
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -261,5 +263,32 @@ func TestDefaultResources(t *testing.T) {
 	}
 	if _, ok := r.Limits["cpu"]; ok {
 		t.Errorf("CPU limit set (%s); only memory is limited", r.Limits.Cpu())
+	}
+}
+
+// helm push stores the chart in <namespace>/<chart name>. If that equals the
+// image repository, chart and image share one tag and the later push
+// retags the other.
+func TestChartRepoDiffersFromImageRepo(t *testing.T) {
+	var chart struct {
+		Name string `json:"name"`
+	}
+	var values struct {
+		Image struct {
+			Repository string `json:"repository"`
+		} `json:"image"`
+	}
+	for file, v := range map[string]any{"Chart.yaml": &chart, "values.yaml": &values} {
+		data, err := os.ReadFile(filepath.Join(chartDir, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := yaml.Unmarshal(data, v); err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+	}
+	image := values.Image.Repository[strings.LastIndex(values.Image.Repository, "/")+1:]
+	if chart.Name == "" || image == "" || chart.Name == image {
+		t.Fatalf("chart name %q vs image repository %q: must be non-empty and differ", chart.Name, values.Image.Repository)
 	}
 }
