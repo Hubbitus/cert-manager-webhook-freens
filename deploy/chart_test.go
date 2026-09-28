@@ -167,3 +167,25 @@ func TestDeploymentRunsUnprivileged(t *testing.T) {
 		t.Errorf("container securityContext = %+v, want non-root, read-only rootfs, no escalation, drop ALL", sc)
 	}
 }
+
+func TestDefaultResources(t *testing.T) {
+	r := deployment(t, render(t)).Spec.Template.Spec.Containers[0].Resources
+	want := map[string]string{
+		"requests.cpu":    "10m",
+		"requests.memory": "32Mi",
+		"limits.memory":   "64Mi",
+	}
+	got := map[string]string{
+		"requests.cpu":    r.Requests.Cpu().String(),
+		"requests.memory": r.Requests.Memory().String(),
+		"limits.memory":   r.Limits.Memory().String(),
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %s, want %s", k, got[k], v)
+		}
+	}
+	if _, ok := r.Limits["cpu"]; ok {
+		t.Errorf("CPU limit set (%s); only memory is limited", r.Limits.Cpu())
+	}
+}
