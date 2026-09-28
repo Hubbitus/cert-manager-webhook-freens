@@ -14,9 +14,30 @@ env:
 jobs:
   release:
     runs-on: ubuntu-24.04
+    # Holds DOCKERHUB_*; protection rules are set on the environment.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # cosign keyless signing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Tag must point at a commit on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main"
+            exit 1
+          fi
+
+      # mise itself is pinned and checked by binary sha256; tools install
+      # --locked from mise.lock checksums.
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.16
+          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
 
       - name: Check tag matches chart version and appVersion
         id: version
@@ -31,7 +52,7 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - run: make vet lint test
+      - run: make vet lint test vulncheck
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -50,6 +71,15 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
           provenance: mode=max
           sbom: true
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Sign image by digest (keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Package and push chart
         env:
