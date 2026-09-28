@@ -10,7 +10,9 @@ permissions:
 env:
   IMAGE: docker.io/hubbitus/cert-manager-webhook-freens
   CHART_NAMESPACE: hubbitus
-  CHART_NAME: cert-manager-webhook-freens
+  CHART_DIR: deploy/cert-manager-webhook-freens
+  # Differs from the image repository name: helm push uses it as the repository.
+  CHART_NAME: cert-manager-webhook-freens-chart
 
 jobs:
   # No secrets here: tag guard and all checks.
@@ -36,7 +38,7 @@ jobs:
         id: version
         run: |
           version="${GITHUB_REF_NAME#v}"
-          chart=deploy/cert-manager-webhook-freens/Chart.yaml
+          chart="$CHART_DIR/Chart.yaml"
           chart_version=$(awk '$1 == "version:" {print $2}' "$chart")
           app_version=$(awk '$1 == "appVersion:" {gsub(/"/, "", $2); print $2}' "$chart")
           if [ "$chart_version" != "$version" ] || [ "$app_version" != "$version" ]; then
@@ -94,7 +96,7 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
           printf '%s' "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
-          helm package "deploy/$CHART_NAME" --destination _out
+          helm package "$CHART_DIR" --destination _out
           helm push "_out/$CHART_NAME-$VERSION.tgz" "oci://registry-1.docker.io/$CHART_NAMESPACE" | tee _out/push.log
           digest=$(awk '$1 == "Digest:" {print $2}' _out/push.log)
           if [ -z "$digest" ]; then

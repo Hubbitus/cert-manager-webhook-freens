@@ -8,10 +8,10 @@ Scaffolded from [cert-manager/webhook-example](https://github.com/cert-manager/w
 
 ## Installation
 
-The image `docker.io/hubbitus/cert-manager-webhook-freens` and the Helm chart `oci://registry-1.docker.io/hubbitus/cert-manager-webhook-freens` are published on every `vX.Y.Z` tag. Install into cert-manager's namespace, pinning the chart version and the image digest:
+The image `docker.io/hubbitus/cert-manager-webhook-freens` and the Helm chart `oci://registry-1.docker.io/hubbitus/cert-manager-webhook-freens-chart` are published on every `vX.Y.Z` tag. Install into cert-manager's namespace, pinning the chart version and the image digest:
 
 ```bash
-helm install cert-manager-webhook-freens oci://registry-1.docker.io/hubbitus/cert-manager-webhook-freens \
+helm install cert-manager-webhook-freens oci://registry-1.docker.io/hubbitus/cert-manager-webhook-freens-chart \
   --version <X.Y.Z> --namespace cert-manager --set image.digest=sha256:<digest>
 ```
 

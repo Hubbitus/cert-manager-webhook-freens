@@ -1,5 +1,7 @@
 apiVersion: v2
-name: cert-manager-webhook-freens
+# Not the image repository name: helm push stores the chart as
+# <namespace>/<chart name>, and a shared repository would share tags.
+name: cert-manager-webhook-freens-chart
 description: cert-manager ACME DNS-01 webhook solver for FreeNS
 type: application
 version: 0.1.0
