@@ -95,25 +95,10 @@ func (c *Client) Records(ctx context.Context, domainID int) ([]Record, error) {
 	return resp.Records, nil
 }
 
-func (c *Client) CreateRecord(ctx context.Context, domainID int, r Record) (Record, error) {
+// CreateRecord creates r; the response body is not used.
+func (c *Client) CreateRecord(ctx context.Context, domainID int, r Record) error {
 	r.ID = 0
-	var raw json.RawMessage
-	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/domains/%d/records", domainID), r, &raw); err != nil {
-		return Record{}, err
-	}
-	// The create response shape is undocumented: accept {"record": {...}}
-	// (as for POST /domains) and a bare record object.
-	var wrapped struct {
-		Record *Record `json:"record"`
-	}
-	if err := json.Unmarshal(raw, &wrapped); err == nil && wrapped.Record != nil {
-		return *wrapped.Record, nil
-	}
-	var bare Record
-	if err := json.Unmarshal(raw, &bare); err != nil {
-		return Record{}, fmt.Errorf("freens: POST /domains/%d/records: decode response: %w", domainID, err)
-	}
-	return bare, nil
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/domains/%d/records", domainID), r, nil)
 }
 
 // DeleteRecord deletes a record; an already deleted record (404) is not an error.

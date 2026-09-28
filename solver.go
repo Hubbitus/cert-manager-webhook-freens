@@ -65,7 +65,7 @@ func (s *freensSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 		return nil
 	}
 	rec := freens.Record{Name: t.name, Type: "TXT", Content: ch.Key, TTL: recordTTL}
-	if _, err := t.api.CreateRecord(ctx, t.domainID, rec); err != nil {
+	if err := t.api.CreateRecord(ctx, t.domainID, rec); err != nil {
 		return err
 	}
 	klog.InfoS("TXT record created", "zone", t.zone, "name", t.name)
