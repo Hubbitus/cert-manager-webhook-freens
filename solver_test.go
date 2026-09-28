@@ -39,6 +39,7 @@ type fakeFreeNS struct {
 	failKey    bool // answer 401 echoing the key
 	failWrites bool // answer 500 to POST and DELETE
 	attempts   int  // POST and DELETE requests, failed ones included
+	transport  http.RoundTripper
 }
 
 func newFakeFreeNS(t *testing.T, seed ...freens.Record) (*fakeFreeNS, string) {
@@ -47,8 +48,10 @@ func newFakeFreeNS(t *testing.T, seed ...freens.Record) (*fakeFreeNS, string) {
 	for _, r := range seed {
 		f.add(r)
 	}
-	srv := httptest.NewServer(f)
+	// TLS: the solver refuses a non-https apiUrl.
+	srv := httptest.NewTLSServer(f)
 	t.Cleanup(srv.Close)
+	f.transport = srv.Client().Transport
 	return f, srv.URL
 }
 
@@ -132,12 +135,13 @@ func apiKeySecret(data map[string][]byte) *corev1.Secret {
 	}
 }
 
-func newSolver(objs ...*corev1.Secret) *freensSolver {
+// newSolver returns a solver that trusts api's TLS certificate.
+func newSolver(api *fakeFreeNS, objs ...*corev1.Secret) *freensSolver {
 	cs := fake.NewClientset()
 	for _, o := range objs {
 		_ = cs.Tracker().Add(o)
 	}
-	return &freensSolver{client: cs}
+	return &freensSolver{client: cs, transport: api.transport}
 }
 
 func challenge(t *testing.T, apiURL, key string, extra map[string]any) *v1alpha1.ChallengeRequest {
@@ -172,7 +176,7 @@ func TestName(t *testing.T) {
 
 func TestPresentCreatesOneTXTWithTTL60(t *testing.T) {
 	api, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 
 	if err := s.Present(challenge(t, url, "k1", nil)); err != nil {
 		t.Fatalf("Present: %v", err)
@@ -190,7 +194,7 @@ func TestPresentCreatesOneTXTWithTTL60(t *testing.T) {
 
 func TestPresentIsIdempotent(t *testing.T) {
 	api, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 	ch := challenge(t, url, "k1", nil)
 
 	if err := s.Present(ch); err != nil {
@@ -208,7 +212,7 @@ func TestPresentIsIdempotent(t *testing.T) {
 // Review Focus #2: example.org and *.example.org share one _acme-challenge name.
 func TestParallelChallengesOnOneName(t *testing.T) {
 	api, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 	apex := challenge(t, url, "key-apex", nil)
 	wild := challenge(t, url, "key-wildcard", nil)
 
@@ -236,10 +240,10 @@ func TestCleanUpByFreshInstance(t *testing.T) {
 	api, url := newFakeFreeNS(t)
 	ch := challenge(t, url, "k1", nil)
 
-	if err := newSolver(validSecret).Present(ch); err != nil {
+	if err := newSolver(api, validSecret).Present(ch); err != nil {
 		t.Fatal(err)
 	}
-	if err := newSolver(validSecret).CleanUp(ch); err != nil {
+	if err := newSolver(api, validSecret).CleanUp(ch); err != nil {
 		t.Fatal(err)
 	}
 
@@ -257,7 +261,7 @@ func TestCleanUpTouchesOnlyMatchingTXT(t *testing.T) {
 		freens.Record{Name: "_acme-challenge", Type: "CNAME", Content: "k1", TTL: 60},
 		freens.Record{Name: "*", Type: "A", Content: "1.2.3.4", TTL: 60},
 	)
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 
 	if err := s.CleanUp(challenge(t, url, "k1", nil)); err != nil {
 		t.Fatal(err)
@@ -273,7 +277,7 @@ func TestCleanUpTouchesOnlyMatchingTXT(t *testing.T) {
 
 func TestCleanUpWithoutRecordIsNil(t *testing.T) {
 	api, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 
 	if err := s.CleanUp(challenge(t, url, "k1", nil)); err != nil {
 		t.Fatalf("CleanUp on empty zone = %v, want nil", err)
@@ -284,8 +288,8 @@ func TestCleanUpWithoutRecordIsNil(t *testing.T) {
 }
 
 func TestSecretMissing(t *testing.T) {
-	_, url := newFakeFreeNS(t)
-	s := newSolver()
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api)
 
 	err := s.Present(challenge(t, url, "k1", nil))
 	if err == nil {
@@ -299,8 +303,8 @@ func TestSecretMissing(t *testing.T) {
 }
 
 func TestSecretKeyMissing(t *testing.T) {
-	_, url := newFakeFreeNS(t)
-	s := newSolver(apiKeySecret(map[string][]byte{"other": []byte(testKey)}))
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api, apiKeySecret(map[string][]byte{"other": []byte(testKey)}))
 
 	err := s.Present(challenge(t, url, "k1", nil))
 	if err == nil {
@@ -317,8 +321,8 @@ func TestSecretKeyMissing(t *testing.T) {
 }
 
 func TestSecretRefIncomplete(t *testing.T) {
-	_, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api, validSecret)
 	ch := challenge(t, url, "k1", map[string]any{"apiKeySecretRef": map[string]any{"name": testSecret}})
 
 	if err := s.Present(ch); err == nil || !strings.Contains(err.Error(), "apiKeySecretRef") {
@@ -327,8 +331,8 @@ func TestSecretRefIncomplete(t *testing.T) {
 }
 
 func TestZoneNotInAccount(t *testing.T) {
-	_, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api, validSecret)
 	ch := challenge(t, url, "k1", nil)
 	ch.ResolvedFQDN = "_acme-challenge.absent.example.com."
 	ch.ResolvedZone = "absent.example.com."
@@ -343,7 +347,7 @@ func TestZoneNotInAccount(t *testing.T) {
 // label that live inside the parent FreeNS domain.
 func TestZoneOverride(t *testing.T) {
 	api, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 	ch := challenge(t, url, "k1", map[string]any{"zone": testZone})
 	ch.ResolvedFQDN = "cert-manager-dns01-tests.ci." + testZone + "."
 	ch.ResolvedZone = "ci." + testZone + "."
@@ -357,8 +361,8 @@ func TestZoneOverride(t *testing.T) {
 }
 
 func TestFQDNOutsideZone(t *testing.T) {
-	_, url := newFakeFreeNS(t)
-	s := newSolver(validSecret)
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api, validSecret)
 	ch := challenge(t, url, "k1", nil)
 	ch.ResolvedFQDN = "_acme-challenge.example.net."
 
@@ -370,7 +374,7 @@ func TestFQDNOutsideZone(t *testing.T) {
 func TestAPIErrorDoesNotLeakKey(t *testing.T) {
 	api, url := newFakeFreeNS(t)
 	api.failKey = true
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 
 	err := s.Present(challenge(t, url, "k1", nil))
 	if err == nil {
@@ -424,7 +428,7 @@ func TestGroupName(t *testing.T) {
 func TestPresentReportsCreateFailure(t *testing.T) {
 	api, url := newFakeFreeNS(t)
 	api.failWrites = true
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 
 	err := s.Present(challenge(t, url, "k1", nil))
 	if err == nil || !strings.Contains(err.Error(), "boom") {
@@ -438,7 +442,7 @@ func TestCleanUpTriesEveryMatchAndReportsFailures(t *testing.T) {
 		freens.Record{Name: "_acme-challenge", Type: "TXT", Content: "k1", TTL: 60},
 	)
 	api.failWrites = true
-	s := newSolver(validSecret)
+	s := newSolver(api, validSecret)
 
 	err := s.CleanUp(challenge(t, url, "k1", nil))
 	if err == nil || !strings.Contains(err.Error(), "boom") {
@@ -450,10 +454,23 @@ func TestCleanUpTriesEveryMatchAndReportsFailures(t *testing.T) {
 }
 
 func TestCleanUpConfigError(t *testing.T) {
-	_, url := newFakeFreeNS(t)
-	s := newSolver()
+	api, url := newFakeFreeNS(t)
+	s := newSolver(api)
 
 	if err := s.CleanUp(challenge(t, url, "k1", nil)); err == nil {
 		t.Fatal("want error when Secret is absent")
+	}
+}
+
+func TestAPIURLMustBeHTTPS(t *testing.T) {
+	for _, u := range []string{"http://freens.example", "ftp://freens.example", "https://", "freens.example/api"} {
+		raw := []byte(`{"apiKeySecretRef":{"name":"n","key":"k"},"apiUrl":"` + u + `"}`)
+		if _, err := loadConfig(&extapi.JSON{Raw: raw}); err == nil || !strings.Contains(err.Error(), "apiUrl") {
+			t.Errorf("apiUrl %q: err = %v, want apiUrl rejected", u, err)
+		}
+	}
+	raw := []byte(`{"apiKeySecretRef":{"name":"n","key":"k"},"apiUrl":"https://freens.example/api/v1"}`)
+	if _, err := loadConfig(&extapi.JSON{Raw: raw}); err != nil {
+		t.Errorf("https apiUrl: %v", err)
 	}
 }

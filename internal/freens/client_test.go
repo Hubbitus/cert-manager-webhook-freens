@@ -273,3 +273,32 @@ func TestTransportErrorDoesNotLeakAPIKey(t *testing.T) {
 	}
 	assertNoKey(t, err)
 }
+
+// The API key must not follow a redirect to another host or a downgrade to http.
+func TestRedirectIsNotFollowed(t *testing.T) {
+	var leaked []string
+	var mu sync.Mutex
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		leaked = append(leaked, r.Header.Get("X-API-Key"))
+		mu.Unlock()
+		_, _ = io.WriteString(w, `{"records":[]}`)
+	}))
+	t.Cleanup(target.Close)
+	c, _ := newClient(t, map[string]response{})
+	redirector := httptest.NewServer(http.RedirectHandler(target.URL+"/domains/2/records", http.StatusFound))
+	t.Cleanup(redirector.Close)
+	c.BaseURL = redirector.URL
+
+	_, err := c.Records(context.Background(), 2)
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusFound {
+		t.Fatalf("err = %v, want *APIError with 302", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(leaked) != 0 {
+		t.Fatalf("redirect target received %d request(s)", len(leaked))
+	}
+}
