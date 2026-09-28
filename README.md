@@ -45,7 +45,7 @@ Tool versions are pinned in [`mise.toml`](mise.toml), with download checksums in
 
 ```bash
 mise install
-mise exec -- make all   # `make check` (vet, lint, unit tests, helm lint, govulncheck) + build
+mise exec -- make all   # `make check` (vet, lint, unit tests with a 100 % per-function coverage gate, helm lint, govulncheck) + build
 ```
 
 ### Conformance

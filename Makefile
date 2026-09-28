@@ -7,7 +7,7 @@ all: check build
 
 # Everything CI and release gate on.
 .PHONY: check
-check: vet lint test helm-lint vulncheck
+check: vet lint cover helm-lint vulncheck
 
 .PHONY: build
 build:
@@ -51,6 +51,20 @@ test-conformance:
 	TEST_ASSET_KUBE_APISERVER=$(ENVTEST_DIR)/kube-apiserver \
 	TEST_ASSET_KUBECTL=$(ENVTEST_DIR)/kubectl \
 	$(GO) test -tags conformance -count=1 -v -run '^TestConformance$$' .
+
+# Unit tests with a coverage gate: every function at 100 % except main(),
+# which only starts the server and is covered by `make smoke`.
+COVER_OUT := _out/cover.out
+
+.PHONY: cover
+cover:
+	mkdir -p _out
+	$(GO) test -race -coverprofile=$(COVER_OUT) ./...
+	@$(GO) tool cover -func=$(COVER_OUT) | awk '\
+		$$1 == "total:" { next } \
+		$$1 ~ /\/main\.go:[0-9]+:$$/ && $$2 == "main" { next } \
+		$$3 != "100.0%" { print "not fully covered: " $$0; bad = 1 } \
+		END { if (bad) exit 1; print "coverage gate: all functions at 100% (main excluded)" }'
 
 .PHONY: vulncheck
 vulncheck:
