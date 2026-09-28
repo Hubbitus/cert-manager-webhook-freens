@@ -47,6 +47,20 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Chart repository must differ from the image repository
+        run: |
+          chart_name=$(awk '$1 == "name:" {print $2}' "$CHART_DIR/Chart.yaml")
+          if [ "$chart_name" != "$CHART_NAME" ]; then
+            echo "::error::Chart.yaml name $chart_name != CHART_NAME $CHART_NAME"
+            exit 1
+          fi
+          # helm push stores the chart as <namespace>/<chart name>; a shared
+          # repository would let chart and image retag each other.
+          if [ "docker.io/$CHART_NAMESPACE/$CHART_NAME" = "$IMAGE" ]; then
+            echo "::error::chart repository docker.io/$CHART_NAMESPACE/$CHART_NAME equals image repository $IMAGE"
+            exit 1
+          fi
+
       - uses: ./.github/actions/setup-mise
       - run: make check
 
