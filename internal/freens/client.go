@@ -103,7 +103,7 @@ func (c *Client) Records(ctx context.Context, domainID int) ([]Record, error) {
 // CreateRecord creates r; the response body is not used.
 func (c *Client) CreateRecord(ctx context.Context, domainID int, r Record) error {
 	r.ID = 0
-	return c.do(ctx, http.MethodPost, fmt.Sprintf("/domains/%d/records", domainID), r, nil)
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/domains/%d/records", domainID), &r, nil)
 }
 
 // DeleteRecord deletes a record; an already deleted record (404) is not an error.
@@ -116,13 +116,11 @@ func (c *Client) DeleteRecord(ctx context.Context, domainID, recordID int) error
 	return err
 }
 
-func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
+func (c *Client) do(ctx context.Context, method, path string, in *Record, out any) error {
 	var body io.Reader
 	if in != nil {
-		b, err := json.Marshal(in)
-		if err != nil {
-			return fmt.Errorf("freens: %s %s: encode request: %w", method, path, err)
-		}
+		// Cannot fail: Record has only string and int fields.
+		b, _ := json.Marshal(in)
 		body = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body)
