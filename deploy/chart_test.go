@@ -85,7 +85,11 @@ func touchesSecrets(r rbacv1.PolicyRule) bool {
 }
 
 func TestClusterRolesGrantNoSecrets(t *testing.T) {
-	for _, o := range byKind(render(t), "ClusterRole") {
+	crs := byKind(render(t), "ClusterRole")
+	if len(crs) == 0 {
+		t.Fatal("no ClusterRole rendered; the check below would pass vacuously")
+	}
+	for _, o := range crs {
 		for _, r := range decode[rbacv1.ClusterRole](t, o).Rules {
 			if touchesSecrets(r) {
 				t.Errorf("ClusterRole %s grants Secrets: %+v", o.Metadata.Name, r)
@@ -121,12 +125,82 @@ func TestSecretAccessIsGetByNameInCertManagerNamespace(t *testing.T) {
 }
 
 func TestSecretNameFromValues(t *testing.T) {
+	var names [][]string
 	for _, o := range byKind(render(t, "--set", "apiKeySecret.name=other-key"), "Role") {
 		for _, r := range decode[rbacv1.Role](t, o).Rules {
-			if touchesSecrets(r) && !slices.Equal(r.ResourceNames, []string{"other-key"}) {
-				t.Errorf("resourceNames = %v, want [other-key]", r.ResourceNames)
+			if touchesSecrets(r) {
+				names = append(names, r.ResourceNames)
 			}
 		}
+	}
+	if len(names) != 1 || !slices.Equal(names[0], []string{"other-key"}) {
+		t.Fatalf("Secret rule resourceNames = %v, want exactly one rule with [other-key]", names)
+	}
+}
+
+const (
+	chartSA     = "rel-cert-manager-webhook-freens"
+	chartPrefix = chartSA + ":"
+)
+
+type binding struct {
+	roleKind, roleName string
+	subjects           []rbacv1.Subject
+}
+
+func sa(ns, name string) rbacv1.Subject {
+	return rbacv1.Subject{Kind: "ServiceAccount", Name: name, Namespace: ns}
+}
+
+// subjects drops apiGroup, which the chart renders as "".
+func subjects(ss []rbacv1.Subject) []rbacv1.Subject {
+	out := make([]rbacv1.Subject, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, rbacv1.Subject{Kind: s.Kind, Name: s.Name, Namespace: s.Namespace})
+	}
+	return out
+}
+
+// Every binding the chart renders, keyed by kind/namespace/name. Together they
+// are the effective permissions of the webhook SA (and what cert-manager gets).
+func TestBindingsAreExactlyTheIntendedOnes(t *testing.T) {
+	webhook := sa("cert-manager", chartSA)
+	want := map[string]binding{
+		"ClusterRoleBinding//" + chartPrefix + "auth-delegator":                    {"ClusterRole", "system:auth-delegator", []rbacv1.Subject{webhook}},
+		"ClusterRoleBinding//" + chartPrefix + "domain-solver":                     {"ClusterRole", chartPrefix + "domain-solver", []rbacv1.Subject{sa("cert-manager", "cert-manager")}},
+		"RoleBinding/kube-system/" + chartPrefix + "webhook-authentication-reader": {"Role", "extension-apiserver-authentication-reader", []rbacv1.Subject{webhook}},
+		"RoleBinding/cert-manager/" + chartPrefix + "secret-reader":                {"Role", chartPrefix + "secret-reader", []rbacv1.Subject{webhook}},
+	}
+
+	objs := render(t)
+	got := map[string]binding{}
+	for _, o := range byKind(objs, "ClusterRoleBinding") {
+		b := decode[rbacv1.ClusterRoleBinding](t, o)
+		got["ClusterRoleBinding//"+b.Name] = binding{b.RoleRef.Kind, b.RoleRef.Name, subjects(b.Subjects)}
+	}
+	for _, o := range byKind(objs, "RoleBinding") {
+		b := decode[rbacv1.RoleBinding](t, o)
+		got["RoleBinding/"+b.Namespace+"/"+b.Name] = binding{b.RoleRef.Kind, b.RoleRef.Name, subjects(b.Subjects)}
+	}
+
+	for k, w := range want {
+		g, ok := got[k]
+		if !ok {
+			t.Errorf("missing %s", k)
+			continue
+		}
+		if g.roleKind != w.roleKind || g.roleName != w.roleName || !slices.Equal(g.subjects, w.subjects) {
+			t.Errorf("%s = %+v, want %+v", k, g, w)
+		}
+	}
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			t.Errorf("unexpected binding %s = %+v", k, got[k])
+		}
+	}
+
+	if d := deployment(t, objs); d.Spec.Template.Spec.ServiceAccountName != chartSA {
+		t.Errorf("Deployment serviceAccountName = %q, want %q", d.Spec.Template.Spec.ServiceAccountName, chartSA)
 	}
 }
 
