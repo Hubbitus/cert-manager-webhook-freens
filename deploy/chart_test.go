@@ -292,3 +292,58 @@ func TestChartRepoDiffersFromImageRepo(t *testing.T) {
 		t.Fatalf("chart name %q vs image repository %q: must be non-empty and differ", chart.Name, values.Image.Repository)
 	}
 }
+
+// cert-manager may only create challenge payloads in the solver's API group.
+func TestDomainSolverRulesExact(t *testing.T) {
+	var found bool
+	for _, o := range byKind(render(t), "ClusterRole") {
+		if o.Metadata.Name != chartPrefix+"domain-solver" {
+			continue
+		}
+		found = true
+		rules := decode[rbacv1.ClusterRole](t, o).Rules
+		want := rbacv1.PolicyRule{APIGroups: []string{"acme.freens.ru"}, Resources: []string{"*"}, Verbs: []string{"create"}}
+		if len(rules) != 1 || !slices.Equal(rules[0].APIGroups, want.APIGroups) ||
+			!slices.Equal(rules[0].Resources, want.Resources) || !slices.Equal(rules[0].Verbs, want.Verbs) ||
+			len(rules[0].ResourceNames) != 0 || len(rules[0].NonResourceURLs) != 0 {
+			t.Fatalf("domain-solver rules = %+v, want exactly [%+v]", rules, want)
+		}
+	}
+	if !found {
+		t.Fatal("domain-solver ClusterRole not rendered")
+	}
+}
+
+// A role nobody binds is dead weight at best and a trap for a later binding.
+func TestEveryRoleIsBound(t *testing.T) {
+	objs := render(t)
+	bound := map[string]bool{}
+	for _, o := range byKind(objs, "ClusterRoleBinding") {
+		b := decode[rbacv1.ClusterRoleBinding](t, o)
+		bound[b.RoleRef.Kind+"//"+b.RoleRef.Name] = true
+	}
+	for _, o := range byKind(objs, "RoleBinding") {
+		b := decode[rbacv1.RoleBinding](t, o)
+		if b.RoleRef.Kind == "ClusterRole" {
+			bound["ClusterRole//"+b.RoleRef.Name] = true
+		} else {
+			bound["Role/"+b.Namespace+"/"+b.RoleRef.Name] = true
+		}
+	}
+	roles := 0
+	for _, o := range byKind(objs, "ClusterRole") {
+		roles++
+		if !bound["ClusterRole//"+o.Metadata.Name] {
+			t.Errorf("ClusterRole %s is not bound", o.Metadata.Name)
+		}
+	}
+	for _, o := range byKind(objs, "Role") {
+		roles++
+		if k := "Role/" + o.Metadata.Namespace + "/" + o.Metadata.Name; !bound[k] {
+			t.Errorf("Role %s is not bound", k)
+		}
+	}
+	if roles == 0 {
+		t.Fatal("no Role or ClusterRole rendered")
+	}
+}
