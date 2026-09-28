@@ -57,3 +57,21 @@ Container image: repository:tag, plus @digest when set. tag defaults to appVersi
 {{- end -}}
 {{- $ref -}}
 {{- end -}}
+
+{{/*
+Selector labels: matchLabels, pod template labels and Service selector.
+*/}}
+{{- define "cert-manager-webhook-freens.selectorLabels" -}}
+app: {{ include "cert-manager-webhook-freens.name" . }}
+release: {{ .Release.Name }}
+{{- end -}}
+
+{{/*
+Common labels of every chart object.
+*/}}
+{{- define "cert-manager-webhook-freens.labels" -}}
+app: {{ include "cert-manager-webhook-freens.name" . }}
+chart: {{ include "cert-manager-webhook-freens.chart" . }}
+release: {{ .Release.Name }}
+heritage: {{ .Release.Service }}
+{{- end -}}

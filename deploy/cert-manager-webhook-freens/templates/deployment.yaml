@@ -4,21 +4,16 @@ metadata:
   name: {{ include "cert-manager-webhook-freens.fullname" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ include "cert-manager-webhook-freens.name" . }}
-    chart: {{ include "cert-manager-webhook-freens.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "cert-manager-webhook-freens.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ include "cert-manager-webhook-freens.name" . }}
-      release: {{ .Release.Name }}
+      {{- include "cert-manager-webhook-freens.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app: {{ include "cert-manager-webhook-freens.name" . }}
-        release: {{ .Release.Name }}
+        {{- include "cert-manager-webhook-freens.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "cert-manager-webhook-freens.fullname" . }}
       securityContext:
