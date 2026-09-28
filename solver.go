@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -30,6 +31,8 @@ const (
 // for the same name never touch each other's records.
 type freensSolver struct {
 	client kubernetes.Interface
+	// transport overrides the FreeNS HTTP transport; tests only.
+	transport http.RoundTripper
 }
 
 var _ webhook.Solver = (*freensSolver)(nil)
@@ -121,6 +124,9 @@ func (s *freensSolver) target(ctx context.Context, ch *v1alpha1.ChallengeRequest
 		return target{}, err
 	}
 	api := freens.NewClient(cfg.APIURL, key)
+	if s.transport != nil {
+		api.HTTP.Transport = s.transport
+	}
 	id, err := api.DomainID(ctx, zone)
 	if err != nil {
 		return target{}, err

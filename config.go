@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	extapi "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -20,7 +21,7 @@ type config struct {
 	// Zone is the FreeNS domain the records go to. Defaults to the zone
 	// cert-manager resolved via SOA lookup.
 	Zone string `json:"zone,omitempty"`
-	// APIURL defaults to freens.DefaultBaseURL.
+	// APIURL must be https; defaults to freens.DefaultBaseURL.
 	APIURL string `json:"apiUrl,omitempty"`
 }
 
@@ -37,6 +38,9 @@ func loadConfig(cfgJSON *extapi.JSON) (config, error) {
 	}
 	if cfg.APIURL == "" {
 		cfg.APIURL = freens.DefaultBaseURL
+	}
+	if u, err := url.Parse(cfg.APIURL); err != nil || u.Scheme != "https" || u.Host == "" {
+		return cfg, fmt.Errorf("solver config: apiUrl %q must be an https:// URL", cfg.APIURL)
 	}
 	return cfg, nil
 }

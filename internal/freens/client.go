@@ -61,7 +61,12 @@ func NewClient(baseURL, apiKey string) *Client {
 	return &Client{
 		BaseURL: strings.TrimSuffix(baseURL, "/"),
 		APIKey:  apiKey,
-		HTTP:    &http.Client{Timeout: DefaultTimeout},
+		HTTP: &http.Client{
+			Timeout: DefaultTimeout,
+			// Never follow redirects: the X-API-Key header would go along to
+			// whatever host or scheme the Location names.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 	}
 }
 
