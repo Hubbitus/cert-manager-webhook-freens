@@ -114,7 +114,7 @@ func TestAPIKeyHeaderOnEveryRequest(t *testing.T) {
 	if _, err := c.Records(ctx, 55); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.CreateRecord(ctx, 55, Record{Name: "a", Type: "TXT", Content: "k", TTL: 60}); err != nil {
+	if err := c.CreateRecord(ctx, 55, Record{Name: "a", Type: "TXT", Content: "k", TTL: 60}); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.DeleteRecord(ctx, 55, 1); err != nil {
@@ -176,12 +176,9 @@ func TestCreateRecordSendsExactBody(t *testing.T) {
 		"POST /domains/55/records": {201, `{"record":{"id":130,"domain_id":55,"name":"_acme-challenge","type":"TXT","content":"k","ttl":60}}`},
 	})
 
-	got, err := c.CreateRecord(context.Background(), 55, Record{Name: "_acme-challenge", Type: "TXT", Content: "k", TTL: 60})
-	if err != nil {
+	// A stale ID on the input must not leak into the create request.
+	if err := c.CreateRecord(context.Background(), 55, Record{ID: 5, Name: "_acme-challenge", Type: "TXT", Content: "k", TTL: 60}); err != nil {
 		t.Fatal(err)
-	}
-	if got.ID != 130 {
-		t.Fatalf("created id = %d, want 130", got.ID)
 	}
 
 	var sent map[string]any
@@ -199,16 +196,14 @@ func TestCreateRecordSendsExactBody(t *testing.T) {
 	}
 }
 
-// The API docs show the domain create response wrapped in {"domain": ...};
-// the record create response is not documented, so a bare object is accepted too.
-func TestCreateRecordAcceptsBareObject(t *testing.T) {
+// The create response is undocumented and unused: any 2xx body is success.
+func TestCreateRecordIgnoresResponseBody(t *testing.T) {
 	c, _ := newClient(t, map[string]response{
-		"POST /domains/55/records": {201, `{"id":131,"domain_id":55,"name":"x","type":"TXT","content":"k","ttl":60}`},
+		"POST /domains/55/records": {201, `not json`},
 	})
 
-	got, err := c.CreateRecord(context.Background(), 55, Record{Name: "x", Type: "TXT", Content: "k", TTL: 60})
-	if err != nil || got.ID != 131 {
-		t.Fatalf("CreateRecord = %+v, %v; want id 131", got, err)
+	if err := c.CreateRecord(context.Background(), 55, Record{Name: "x", Type: "TXT", Content: "k", TTL: 60}); err != nil {
+		t.Fatalf("CreateRecord = %v, want nil", err)
 	}
 }
 
