@@ -39,8 +39,8 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           chart="$CHART_DIR/Chart.yaml"
-          chart_version=$(awk '$1 == "version:" {print $2}' "$chart")
-          app_version=$(awk '$1 == "appVersion:" {gsub(/"/, "", $2); print $2}' "$chart")
+          chart_version=$(awk '/^version:/ {gsub(/"/, "", $2); print $2}' "$chart")
+          app_version=$(awk '/^appVersion:/ {gsub(/"/, "", $2); print $2}' "$chart")
           if [ "$chart_version" != "$version" ] || [ "$app_version" != "$version" ]; then
             echo "::error::tag $GITHUB_REF_NAME != Chart.yaml version $chart_version / appVersion $app_version"
             exit 1
@@ -49,7 +49,7 @@ jobs:
 
       - name: Chart repository must differ from the image repository
         run: |
-          chart_name=$(awk '$1 == "name:" {print $2}' "$CHART_DIR/Chart.yaml")
+          chart_name=$(awk '/^name:/ {gsub(/"/, "", $2); print $2}' "$CHART_DIR/Chart.yaml")
           if [ "$chart_name" != "$CHART_NAME" ]; then
             echo "::error::Chart.yaml name $chart_name != CHART_NAME $CHART_NAME"
             exit 1
@@ -102,6 +102,15 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ needs.verify.outputs.version }}
           provenance: mode=max
           sbom: true
+
+      # The pushed artifact itself, not the verify build: pull by digest
+      # (amd64 variant on this runner) and require a clean --help.
+      - name: Smoke the published image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          out=$(docker run --rm "${IMAGE}@${DIGEST}" --help 2>&1) || { echo "$out"; echo "::error::--help exited non-zero"; exit 1; }
+          echo "$out" | grep -q '^Usage:' || { echo "$out"; echo "::error::no Usage: in --help output"; exit 1; }
 
       - name: Package and push chart
         id: chart

@@ -1,6 +1,7 @@
 {{/* vim: set filetype=mustache: */}}
 {{/*
-Expand the name of the chart.
+Base name of chart objects — fixed, not .Chart.Name (the chart is published
+as cert-manager-webhook-freens-chart, see Chart.yaml).
 */}}
 {{- define "cert-manager-webhook-freens.name" -}}
 {{- default "cert-manager-webhook-freens" .Values.nameOverride | trunc 63 | trimSuffix "-" -}}

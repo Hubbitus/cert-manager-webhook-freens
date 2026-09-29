@@ -21,10 +21,10 @@ vet:
 lint:
 	golangci-lint run --build-tags conformance ./...
 
-# Unit tests only; the conformance suite against live FreeNS is `test-conformance`.
+# Unit tests; same as `cover` (with the coverage gate). The conformance suite
+# against live FreeNS is `test-conformance`.
 .PHONY: test
-test:
-	$(GO) test -race ./...
+test: cover
 
 # envtest control plane for the conformance suite; setup-envtest is pinned in mise.toml.
 ENVTEST_K8S_VERSION := 1.37.0
