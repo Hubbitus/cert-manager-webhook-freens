@@ -20,7 +20,7 @@ const (
 
 	// ApexName is how FreeNS names the zone apex in a record's `name` field.
 	// Source: API docs ("Names use `@` for apex/root domain"), checked
-	// 2026-09-28; pending confirmation against the live API.
+	// 2026-09-28; confirmed against the live API on 2026-09-29.
 	ApexName = "@"
 )
 
