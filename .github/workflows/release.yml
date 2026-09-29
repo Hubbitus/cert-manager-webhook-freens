@@ -123,10 +123,7 @@ jobs:
           helm package "$CHART_DIR" --destination _out
           helm push "_out/$CHART_NAME-$VERSION.tgz" "oci://registry-1.docker.io/$CHART_NAMESPACE" | tee _out/push.log
           digest=$(awk '$1 == "Digest:" {print $2}' _out/push.log)
-          if [ -z "$digest" ]; then
-            echo "::error::no digest in helm push output"
-            exit 1
-          fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::bad chart digest '$digest'"; exit 1; }
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   # Signs what publish pushed, by digest. The only job with id-token.
@@ -153,6 +150,9 @@ jobs:
           IMAGE_DIGEST: ${{ needs.publish.outputs.image-digest }}
           CHART_DIGEST: ${{ needs.publish.outputs.chart-digest }}
         run: |
+          for d in "$IMAGE_DIGEST" "$CHART_DIGEST"; do
+            [[ "$d" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::bad digest '$d'"; exit 1; }
+          done
           cosign sign --yes "${IMAGE}@${IMAGE_DIGEST}"
           cosign sign --yes "docker.io/${CHART_NAMESPACE}/${CHART_NAME}@${CHART_DIGEST}"
 
