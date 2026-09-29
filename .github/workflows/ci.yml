@@ -25,3 +25,9 @@ jobs:
     if: github.event_name == 'push'
     needs: check
     uses: ./.github/workflows/conformance.yml
+    # Environment secrets (FREENS_API_KEY in `conformance`) reach a called
+    # workflow only with `secrets: inherit`, although the docs imply the
+    # job-level `environment` alone suffices (actions/runner#1490).
+    # inherit also passes every repo-level secret: keep repo-level secrets
+    # empty, credentials live only in environments.
+    secrets: inherit

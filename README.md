@@ -97,6 +97,8 @@ GitHub environments hold the credentials:
 - `conformance`: secret `FREENS_API_KEY`.
 - `release`: secret `DOCKERHUB_TOKEN` and variable `DOCKERHUB_USERNAME`. The token needs Read & Write access only (no Delete); Docker Hub personal access tokens cannot be limited to one repository, an organization access token can.
 
+Keep repository-level secrets empty: the conformance workflow is called with `secrets: inherit` (needed for its environment secret to resolve), which would also hand it every repository secret.
+
 ## License
 
 [Apache-2.0](LICENSE), as the upstream `webhook-example`.
